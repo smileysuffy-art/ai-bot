@@ -73,10 +73,14 @@ def analyze_pair(pair):
     df = pd.DataFrame(data)
     df = df.astype(float)
 
+    # -----------------------------
     # EMA
+    # -----------------------------
     df["ema"] = df["close"].ewm(span=10).mean()
 
+    # -----------------------------
     # RSI
+    # -----------------------------
     delta = df["close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -87,7 +91,24 @@ def analyze_pair(pair):
     rs = avg_gain / avg_loss
     df["rsi"] = 100 - (100 / (1 + rs))
 
-    # Latest values
+    # -----------------------------
+    # SUPPORT / RESISTANCE
+    # -----------------------------
+    support = df["low"].min()
+    resistance = df["high"].max()
+
+    # -----------------------------
+    # MARKET CONDITION
+    # -----------------------------
+    price_range = resistance - support
+    if price_range < (df["close"].mean() * 0.002):
+        market = "RANGING"
+    else:
+        market = "TRENDING"
+
+    # -----------------------------
+    # LATEST CANDLES
+    # -----------------------------
     last = df.iloc[-1]
     prev = df.iloc[-2]
 
@@ -115,23 +136,49 @@ def analyze_pair(pair):
         confidence += 25
 
     # -----------------------------
-    # CANDLE CONFIRMATION (simple engulfing)
+    # SUPPORT / RESISTANCE LOGIC
     # -----------------------------
-    if last["close"] > last["open"] and prev["close"] < prev["open"]:
+    if last["close"] <= support * 1.001:
         signal = "BUY"
         confidence += 20
 
-    if last["close"] < last["open"] and prev["close"] > prev["open"]:
+    if last["close"] >= resistance * 0.999:
         signal = "SELL"
         confidence += 20
 
     # -----------------------------
+    # BREAKOUT LOGIC
+    # -----------------------------
+    if last["close"] > resistance:
+        signal = "BUY"
+        confidence += 25
+
+    if last["close"] < support:
+        signal = "SELL"
+        confidence += 25
+
+    # -----------------------------
+    # FAKE BREAKOUT FILTER
+    # -----------------------------
+    if last["high"] > resistance and last["close"] < resistance:
+        signal = "SELL"
+        confidence += 15
+
+    if last["low"] < support and last["close"] > support:
+        signal = "BUY"
+        confidence += 15
+
+    # -----------------------------
     # FINAL FILTER
     # -----------------------------
-    if signal is None or confidence < 60:
+    if signal is None or confidence < 70:
         return None
 
-    timeframe = random.choice(["1m","2m","5m","10m"])
+    # Smart timeframe
+    if market == "TRENDING":
+        timeframe = random.choice(["5m", "10m"])
+    else:
+        timeframe = random.choice(["1m", "2m"])
 
     return {
         "pair": pair,
