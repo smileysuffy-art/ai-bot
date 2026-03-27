@@ -49,7 +49,18 @@ def strategy_score():
 def calculate_confidence(base_score):
     ai_boost = random.randint(0, 10)
     return min(100, base_score + ai_boost)
+def get_real_data(pair):
+    symbol = pair[:3] + "/" + pair[3:]
 
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=1min&outputsize=10&apikey={API_KEY}"
+
+    response = requests.get(url)
+    data = response.json()
+
+    if "values" not in data:
+        return None
+
+    return data["values"]
 # -----------------------------
 # SIGNAL ENGINE (SNIPER LOGIC)
 # -----------------------------
