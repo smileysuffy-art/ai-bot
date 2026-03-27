@@ -76,7 +76,15 @@ def analyze_pair(pair):
     base_score = strategy_score()
     confidence = calculate_confidence(base_score)
 
-    signal = random.choice(["BUY", "SELL"])
+    # simple trend hint using last candle
+    last_candle = data[0]
+    open_price = float(last_candle["open"])
+    close_price = float(last_candle["close"])
+
+    if close_price > open_price:
+        signal = "BUY"
+    else:
+        signal = "SELL"
 
     if confidence < 65:
         return None
