@@ -3,7 +3,10 @@ import logging
 import random
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+import requests
+import pandas as pd
 
+API_KEY = "5d41640e898444bb98f7e95f816a8416"
 logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("BOT_TOKEN")
