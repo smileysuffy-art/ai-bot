@@ -67,7 +67,12 @@ def get_real_data(pair):
 def analyze_pair(pair):
     condition = detect_market_condition()
     timeframe = select_timeframe(condition)
-data = get_real_data(pair)
+
+    data = get_real_data(pair)
+
+    if data is None:
+        return None
+
     base_score = strategy_score()
     confidence = calculate_confidence(base_score)
 
