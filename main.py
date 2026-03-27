@@ -65,29 +65,73 @@ def get_real_data(pair):
 # SIGNAL ENGINE (SNIPER LOGIC)
 # -----------------------------
 def analyze_pair(pair):
-    condition = detect_market_condition()
-    timeframe = select_timeframe(condition)
-
     data = get_real_data(pair)
 
     if data is None:
         return None
 
-    base_score = strategy_score()
-    confidence = calculate_confidence(base_score)
+    df = pd.DataFrame(data)
+    df = df.astype(float)
 
-    # simple trend hint using last candle
-    last_candle = data[0]
-    open_price = float(last_candle["open"])
-    close_price = float(last_candle["close"])
+    # EMA
+    df["ema"] = df["close"].ewm(span=10).mean()
 
-    if close_price > open_price:
-        signal = "BUY"
+    # RSI
+    delta = df["close"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+
+    rs = avg_gain / avg_loss
+    df["rsi"] = 100 - (100 / (1 + rs))
+
+    # Latest values
+    last = df.iloc[-1]
+    prev = df.iloc[-2]
+
+    signal = None
+    confidence = 0
+
+    # -----------------------------
+    # TREND (EMA)
+    # -----------------------------
+    if last["close"] > last["ema"]:
+        trend = "UP"
+        confidence += 20
     else:
-        signal = "SELL"
+        trend = "DOWN"
+        confidence += 20
 
-    if confidence < 65:
+    # -----------------------------
+    # RSI FILTER
+    # -----------------------------
+    if last["rsi"] < 30:
+        signal = "BUY"
+        confidence += 25
+    elif last["rsi"] > 70:
+        signal = "SELL"
+        confidence += 25
+
+    # -----------------------------
+    # CANDLE CONFIRMATION (simple engulfing)
+    # -----------------------------
+    if last["close"] > last["open"] and prev["close"] < prev["open"]:
+        signal = "BUY"
+        confidence += 20
+
+    if last["close"] < last["open"] and prev["close"] > prev["open"]:
+        signal = "SELL"
+        confidence += 20
+
+    # -----------------------------
+    # FINAL FILTER
+    # -----------------------------
+    if signal is None or confidence < 60:
         return None
+
+    timeframe = random.choice(["1m","2m","5m","10m"])
 
     return {
         "pair": pair,
