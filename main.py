@@ -64,6 +64,7 @@ def get_real_data(pair):
 # -----------------------------
 # SIGNAL ENGINE (SNIPER LOGIC)
 # -----------------------------
+
 def analyze_pair(pair):
     data = get_real_data(pair)
 
@@ -74,7 +75,7 @@ def analyze_pair(pair):
     df = df.astype(float)
 
     # -----------------------------
-    # EMA
+    # EMA (Trend)
     # -----------------------------
     df["ema"] = df["close"].ewm(span=10).mean()
 
@@ -92,22 +93,29 @@ def analyze_pair(pair):
     df["rsi"] = 100 - (100 / (1 + rs))
 
     # -----------------------------
-    # SUPPORT / RESISTANCE
+    # MACD
+    # -----------------------------
+    ema12 = df["close"].ewm(span=12).mean()
+    ema26 = df["close"].ewm(span=26).mean()
+    df["macd"] = ema12 - ema26
+    df["signal_line"] = df["macd"].ewm(span=9).mean()
+
+    # -----------------------------
+    # Bollinger Bands
+    # -----------------------------
+    df["ma"] = df["close"].rolling(window=20).mean()
+    df["std"] = df["close"].rolling(window=20).std()
+    df["upper"] = df["ma"] + (df["std"] * 2)
+    df["lower"] = df["ma"] - (df["std"] * 2)
+
+    # -----------------------------
+    # Support / Resistance
     # -----------------------------
     support = df["low"].min()
     resistance = df["high"].max()
 
     # -----------------------------
-    # MARKET CONDITION
-    # -----------------------------
-    price_range = resistance - support
-    if price_range < (df["close"].mean() * 0.002):
-        market = "RANGING"
-    else:
-        market = "TRENDING"
-
-    # -----------------------------
-    # LATEST CANDLES
+    # Latest candles
     # -----------------------------
     last = df.iloc[-1]
     prev = df.iloc[-2]
@@ -116,13 +124,23 @@ def analyze_pair(pair):
     confidence = 0
 
     # -----------------------------
-    # TREND (EMA)
+    # TREND (Highest weight)
     # -----------------------------
     if last["close"] > last["ema"]:
         trend = "UP"
-        confidence += 20
+        confidence += 30
     else:
         trend = "DOWN"
+        confidence += 30
+
+    # -----------------------------
+    # MACD CONFIRMATION
+    # -----------------------------
+    if last["macd"] > last["signal_line"]:
+        signal = "BUY"
+        confidence += 20
+    else:
+        signal = "SELL"
         confidence += 20
 
     # -----------------------------
@@ -130,55 +148,42 @@ def analyze_pair(pair):
     # -----------------------------
     if last["rsi"] < 30:
         signal = "BUY"
-        confidence += 25
+        confidence += 15
     elif last["rsi"] > 70:
         signal = "SELL"
-        confidence += 25
+        confidence += 15
 
     # -----------------------------
-    # SUPPORT / RESISTANCE LOGIC
+    # BOLLINGER BANDS
     # -----------------------------
-    if last["close"] <= support * 1.001:
+    if last["close"] <= last["lower"]:
         signal = "BUY"
-        confidence += 20
-
-    if last["close"] >= resistance * 0.999:
-        signal = "SELL"
-        confidence += 20
-
-    # -----------------------------
-    # BREAKOUT LOGIC
-    # -----------------------------
-    if last["close"] > resistance:
-        signal = "BUY"
-        confidence += 25
-
-    if last["close"] < support:
-        signal = "SELL"
-        confidence += 25
-
-    # -----------------------------
-    # FAKE BREAKOUT FILTER
-    # -----------------------------
-    if last["high"] > resistance and last["close"] < resistance:
+        confidence += 15
+    elif last["close"] >= last["upper"]:
         signal = "SELL"
         confidence += 15
 
-    if last["low"] < support and last["close"] > support:
-        signal = "BUY"
-        confidence += 15
+    # -----------------------------
+    # SIMPLE CANDLE (Hammer / Shooting Star)
+    # -----------------------------
+    body = abs(last["close"] - last["open"])
+    wick = last["high"] - last["low"]
+
+    if body < (wick * 0.3):
+        if last["close"] > last["open"]:
+            signal = "BUY"
+            confidence += 10
+        else:
+            signal = "SELL"
+            confidence += 10
 
     # -----------------------------
     # FINAL FILTER
     # -----------------------------
-    if signal is None or confidence < 70:
+    if signal is None or confidence < 75:
         return None
 
-    # Smart timeframe
-    if market == "TRENDING":
-        timeframe = random.choice(["5m", "10m"])
-    else:
-        timeframe = random.choice(["1m", "2m"])
+    timeframe = random.choice(["1m","2m","5m","10m"])
 
     return {
         "pair": pair,
@@ -186,7 +191,6 @@ def analyze_pair(pair):
         "signal": signal,
         "confidence": confidence
     }
-
 # -----------------------------
 # TELEGRAM HANDLERS
 # -----------------------------
