@@ -1,3 +1,0 @@
-websockets
-python-telegram-bot
-pandas
